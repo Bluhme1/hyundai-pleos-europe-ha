@@ -54,7 +54,7 @@ Data is polled from Pleos every 15 minutes.
 
 | Platform | Entities |
 |---|---|
-| Sensor | VIN, odometer, EV range, EV battery level, estimated charge duration, charge target (AC and DC), outside and set temperature, tyre pressure (four wheels), last updated, location last updated |
+| Sensor | VIN, odometer, fuel level and fuel range (petrol and hybrid cars only), EV range, EV battery level, estimated charge duration, charge target (AC and DC), outside and set temperature, tyre pressure (four wheels), last updated, location last updated |
 | Binary sensor | Locked (on = unlocked), per-door lock and open states, bonnet, boot, sunroof, EV charging, plugged in, engine (ignition), air conditioner, defrost, steering wheel heater, seat heaters, and the warning lights Pleos reports (low fuel, smart key battery, washer fluid, brake fluid, oil level, tyre pressure, headlamp, rear lamp and turn signal faults) |
 | Device tracker | Location (GPS) |
 
@@ -72,7 +72,7 @@ Pleos returns the copy of the car's data it already holds, which is updated when
 
 - **Read-only.** Pleos's Vehicle Data API has no commands. You can't lock or unlock the car, start climate or charging, or open windows from this integration.
 - **Europe only**, according to Pleos.
-- **Not every car reports every field.** Window positions, fuel level, battery health and service data aren't part of this API.
+- **Not every car reports every field.** Window positions, battery health and service data aren't part of this API. Fuel level and fuel range come from the petrol or hybrid engine, so pure EVs show them as unknown.
 - **Data is as current as the car's last upload to Hyundai.**
 
 ## Migrating from kia_uvo
@@ -81,7 +81,7 @@ Entity names follow the vehicle's device name, so an entity named `tucson_ev_bat
 
 - `lock.*_door_lock` → `binary_sensor.*_locked`. This is read-only, and its "on" means unlocked.
 - Seat sensors → seat heater binary sensors.
-- Fuel level, car battery level, back window heater, and kia_uvo's force-update and lock/climate services have no equivalent. Update any automations or dashboards that use them.
+- Car battery level, back window heater, and kia_uvo's force-update and lock/climate services have no equivalent. Fuel level and fuel range are now available for petrol and hybrid cars. Update any automations or dashboards that use the removed entities or services.
 
 ## Security
 
