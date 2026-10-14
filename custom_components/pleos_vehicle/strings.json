@@ -1,0 +1,212 @@
+{
+  "title": "Pleos Vehicle Data",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pleos Vehicle Data",
+        "description": "Choose your car's brand, then enter the Client ID and Client Secret of your My Vehicle API key from the Pleos Playground. The integration is read-only.",
+        "data": {
+          "brand": "Brand",
+          "client_id": "Client ID",
+          "client_secret": "Client secret"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Pleos Vehicle Data - Credentials",
+        "description": "Pleos rejected the stored credentials. Enter the Client ID and Client Secret again.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client secret"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Client ID or client secret rejected.",
+      "cannot_connect": "Could not reach the Pleos API.",
+      "no_vehicles": "No vehicles are shared with this API key."
+    },
+    "abort": {
+      "already_configured": "This API key is already configured.",
+      "reauth_successful": "Credentials updated."
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh vehicle data",
+      "description": "Fetches the latest vehicle data from Pleos now instead of waiting for the next scheduled update. Pleos only returns what the car last uploaded."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "vehicle_identification_number": {
+        "name": "Vehicle Identification Number"
+      },
+      "odometer": {
+        "name": "Odometer"
+      },
+      "ev_driving_range": {
+        "name": "EV Range"
+      },
+      "ev_battery_percentage": {
+        "name": "EV Battery Level"
+      },
+      "ev_estimated_current_charge_duration": {
+        "name": "Estimated Charge Duration"
+      },
+      "charge_target_ac": {
+        "name": "Charge Target AC"
+      },
+      "charge_target_dc": {
+        "name": "Charge Target DC"
+      },
+      "outside_temperature": {
+        "name": "Outside temperature"
+      },
+      "air_temperature": {
+        "name": "Set Temperature"
+      },
+      "tire_pressure_front_left": {
+        "name": "Tire Pressure - Front Left"
+      },
+      "tire_pressure_front_right": {
+        "name": "Tire Pressure - Front Right"
+      },
+      "tire_pressure_rear_left": {
+        "name": "Tire Pressure - Rear Left"
+      },
+      "tire_pressure_rear_right": {
+        "name": "Tire Pressure - Rear Right"
+      },
+      "last_updated_at": {
+        "name": "Last Updated At"
+      },
+      "location_last_updated_at": {
+        "name": "Location Last Updated"
+      }
+    },
+    "binary_sensor": {
+      "is_locked": {
+        "name": "Locked"
+      },
+      "front_left_door_is_locked": {
+        "name": "Front Left Door Lock"
+      },
+      "front_right_door_is_locked": {
+        "name": "Front Right Door Lock"
+      },
+      "back_left_door_is_locked": {
+        "name": "Back Left Door Lock"
+      },
+      "back_right_door_is_locked": {
+        "name": "Back Right Door Lock"
+      },
+      "front_left_door_is_open": {
+        "name": "Front Left Door"
+      },
+      "front_right_door_is_open": {
+        "name": "Front Right Door"
+      },
+      "back_left_door_is_open": {
+        "name": "Back Left Door"
+      },
+      "back_right_door_is_open": {
+        "name": "Back Right Door"
+      },
+      "hood_is_open": {
+        "name": "Hood"
+      },
+      "trunk_is_open": {
+        "name": "Trunk"
+      },
+      "sunroof_is_open": {
+        "name": "Sunroof"
+      },
+      "ev_battery_is_charging": {
+        "name": "EV Battery Charge"
+      },
+      "ev_battery_is_plugged_in": {
+        "name": "EV Battery Plug"
+      },
+      "engine_is_running": {
+        "name": "Engine"
+      },
+      "air_control_is_on": {
+        "name": "Air Conditioner"
+      },
+      "defrost_is_on": {
+        "name": "Defrost"
+      },
+      "steering_wheel_heater_is_on": {
+        "name": "Steering Wheel Heater"
+      },
+      "front_left_seat_heater_on": {
+        "name": "Front Left Seat Heater"
+      },
+      "front_right_seat_heater_on": {
+        "name": "Front Right Seat Heater"
+      },
+      "rear_left_seat_heater_on": {
+        "name": "Rear Left Seat Heater"
+      },
+      "rear_right_seat_heater_on": {
+        "name": "Rear Right Seat Heater"
+      },
+      "fuel_level_is_low": {
+        "name": "Fuel Low Level"
+      },
+      "smart_key_battery_warning_is_on": {
+        "name": "Smart Key Battery Warning"
+      },
+      "washer_fluid_warning_is_on": {
+        "name": "Washer Fluid Warning"
+      },
+      "brake_fluid_warning_is_on": {
+        "name": "Brake Fluid Warning"
+      },
+      "oil_level_warning_is_on": {
+        "name": "Oil Level Warning"
+      },
+      "tire_pressure_all_warning_is_on": {
+        "name": "Tire Pressure - All"
+      },
+      "tire_pressure_front_left_warning_is_on": {
+        "name": "Tire Pressure - Front Left"
+      },
+      "tire_pressure_front_right_warning_is_on": {
+        "name": "Tire Pressure - Front Right"
+      },
+      "tire_pressure_rear_left_warning_is_on": {
+        "name": "Tire Pressure - Rear Left"
+      },
+      "tire_pressure_rear_right_warning_is_on": {
+        "name": "Tire Pressure - Rear Right"
+      },
+      "headlamp_status": {
+        "name": "Headlamp Status"
+      },
+      "stop_lamp_left": {
+        "name": "Rear Left Lamp Fault"
+      },
+      "stop_lamp_right": {
+        "name": "Rear Right Lamp Fault"
+      },
+      "turn_signal_left_front": {
+        "name": "Turn Signal Left Front"
+      },
+      "turn_signal_right_front": {
+        "name": "Turn Signal Right Front"
+      },
+      "turn_signal_left_rear": {
+        "name": "Turn Signal Left Rear"
+      },
+      "turn_signal_right_rear": {
+        "name": "Turn Signal Right Rear"
+      }
+    },
+    "device_tracker": {
+      "location": {
+        "name": "Location"
+      }
+    }
+  }
+}
