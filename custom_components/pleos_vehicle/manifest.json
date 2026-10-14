@@ -1,0 +1,12 @@
+{
+  "domain": "pleos_vehicle",
+  "name": "Pleos Vehicle Data",
+  "codeowners": ["@Thrasher2020"],
+  "config_flow": true,
+  "documentation": "https://github.com/Thrasher2020/hyundai-pleos-europe-ha",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Thrasher2020/hyundai-pleos-europe-ha/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
