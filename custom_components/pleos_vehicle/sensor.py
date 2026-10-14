@@ -23,7 +23,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import KEY_FUEL_ECONOMY, KEY_FUEL_ECONOMY_AVERAGE, KEY_FUEL_ECONOMY_UNIT
+from .const import (
+    KEY_ELECTRIC_ECONOMY,
+    KEY_ELECTRIC_ECONOMY_AVERAGE,
+    KEY_ELECTRIC_ECONOMY_UNIT,
+    KEY_FUEL_ECONOMY,
+    KEY_FUEL_ECONOMY_AVERAGE,
+    KEY_FUEL_ECONOMY_UNIT,
+)
 from .coordinator import PleosConfigEntry, PleosVehicleCoordinator
 from .entity import PleosVehicleEntity
 from .readings import LENGTH_UNITS, dig, length_unit, odometer
@@ -209,6 +216,27 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
         suggested_display_precision=1,
         value_fn=lambda data: data.get(KEY_FUEL_ECONOMY_AVERAGE),
         unit_fn=lambda data: data.get(KEY_FUEL_ECONOMY_UNIT),
+    ),
+    PleosSensorEntityDescription(
+        key="ev_economy",
+        translation_key="ev_economy",
+        # Worked out by the coordinator from the odometer and the battery level,
+        # because Pleos has no economy figure and never reports kilowatt-hours
+        # used. No device class exists for electric economy, so the unit follows
+        # the car: mi/kWh for a car showing miles, kWh/100km for one showing
+        # kilometres.
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get(KEY_ELECTRIC_ECONOMY),
+        unit_fn=lambda data: data.get(KEY_ELECTRIC_ECONOMY_UNIT),
+    ),
+    PleosSensorEntityDescription(
+        key="ev_economy_average",
+        translation_key="ev_economy_average",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get(KEY_ELECTRIC_ECONOMY_AVERAGE),
+        unit_fn=lambda data: data.get(KEY_ELECTRIC_ECONOMY_UNIT),
     ),
     PleosSensorEntityDescription(
         key="ev_battery_percentage",

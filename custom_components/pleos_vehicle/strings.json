@@ -9,10 +9,12 @@
           "brand": "Brand",
           "client_id": "Client ID",
           "client_secret": "Client secret",
-          "tank_capacity": "Fuel tank capacity"
+          "tank_capacity": "Fuel tank capacity",
+          "battery_capacity": "Battery capacity"
         },
         "data_description": {
-          "tank_capacity": "Used to work out fuel economy. 42 L is the figure for the NX4 Tucson plug-in hybrid; adjust it for your car."
+          "tank_capacity": "Used to work out fuel economy. 42 L is the figure for the NX4 Tucson plug-in hybrid; adjust it for your car.",
+          "battery_capacity": "Used to work out electric economy. 60 kWh is a typical mid-size pure-EV battery; adjust it for your car."
         }
       },
       "reauth_confirm": {
@@ -40,10 +42,12 @@
         "title": "Pleos Vehicle Data",
         "description": "Change how the Pleos data is interpreted. The integration stays read-only.",
         "data": {
-          "tank_capacity": "Fuel tank capacity"
+          "tank_capacity": "Fuel tank capacity",
+          "battery_capacity": "Battery capacity"
         },
         "data_description": {
-          "tank_capacity": "Used to work out fuel economy, because Pleos reports the fuel level as a percentage and never reports litres burned."
+          "tank_capacity": "Used to work out fuel economy, because Pleos reports the fuel level as a percentage and never reports litres burned.",
+          "battery_capacity": "Used to work out electric economy, because Pleos reports the battery state of charge as a percentage and never reports kilowatt-hours used."
         }
       }
     }
@@ -76,6 +80,12 @@
       },
       "fuel_economy_average": {
         "name": "Fuel Economy (Average)"
+      },
+      "ev_economy": {
+        "name": "EV Economy (Last Charge)"
+      },
+      "ev_economy_average": {
+        "name": "EV Economy (Average)"
       },
       "ev_battery_percentage": {
         "name": "EV Battery Level"

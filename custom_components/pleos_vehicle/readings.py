@@ -52,3 +52,11 @@ def fuel_level(data: dict[str, Any]) -> float | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
     return float(value)
+
+
+def battery_level(data: dict[str, Any]) -> float | None:
+    """Return the battery state of charge as a percentage."""
+    value = dig(data, "batteries", "charge", "stateOfCharge")
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return float(value)

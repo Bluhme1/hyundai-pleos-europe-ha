@@ -16,19 +16,24 @@ from homeassistant.util.unit_conversion import DistanceConverter
 
 from .api import PleosAuthError, PleosClient, PleosError
 from .const import (
+    CONF_BATTERY_CAPACITY,
     CONF_TANK_CAPACITY,
+    DEFAULT_BATTERY_CAPACITY,
     DEFAULT_TANK_CAPACITY,
     DOMAIN,
+    KEY_ELECTRIC_ECONOMY,
+    KEY_ELECTRIC_ECONOMY_AVERAGE,
+    KEY_ELECTRIC_ECONOMY_UNIT,
     KEY_FUEL_ECONOMY,
     KEY_FUEL_ECONOMY_AVERAGE,
     KEY_FUEL_ECONOMY_UNIT,
     LITRES_PER_UK_GALLON,
     MAX_ODOMETER_STEP,
-    REFUEL_LEVEL_RISE,
+    LEVEL_RISE,
     SCAN_INTERVAL,
     STORAGE_VERSION,
 )
-from .readings import fuel_level, length_unit, odometer
+from .readings import battery_level, fuel_level, length_unit, odometer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,16 +44,33 @@ ECONOMY_UNITS = {
     UnitOfLength.KILOMETERS: "L/100km",
 }
 
+# Electric economy likewise: miles per kilowatt-hour for a car showing
+# miles, kilowatt-hours per 100 km for one showing kilometres.
+ELECTRIC_ECONOMY_UNITS = {
+    UnitOfLength.MILES: "mi/kWh",
+    UnitOfLength.KILOMETERS: "kWh/100km",
+}
+
+
+def capacity_from_entry(entry: ConfigEntry, key: str, default: float) -> float:
+    """Return a configured capacity, falling back to the default."""
+    value = entry.options.get(key, entry.data.get(key))
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        return float(value)
+    return default
+
 
 def tank_capacity_from_entry(entry: ConfigEntry) -> float:
     """Return the configured fuel tank size in litres."""
-    value = entry.options.get(CONF_TANK_CAPACITY, entry.data.get(CONF_TANK_CAPACITY))
-    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
-        return float(value)
-    return DEFAULT_TANK_CAPACITY
+    return capacity_from_entry(entry, CONF_TANK_CAPACITY, DEFAULT_TANK_CAPACITY)
 
 
-def economy_value(distance: float, litres: float, unit: str | None) -> float | None:
+def battery_capacity_from_entry(entry: ConfigEntry) -> float:
+    """Return the configured battery size in kilowatt-hours."""
+    return capacity_from_entry(entry, CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY)
+
+
+def fuel_economy_value(distance: float, litres: float, unit: str | None) -> float | None:
     """Return the distance covered per unit of fuel, in the car's own unit."""
     if unit is None or distance <= 0 or litres <= 0:
         return None
@@ -58,20 +80,31 @@ def economy_value(distance: float, litres: float, unit: str | None) -> float | N
     return round(litres / kilometres * 100, 1)
 
 
+def electric_economy_value(distance: float, kwh: float, unit: str | None) -> float | None:
+    """Return the distance covered per unit of energy, in the car's own unit."""
+    if unit is None or distance <= 0 or kwh <= 0:
+        return None
+    if unit == UnitOfLength.MILES:
+        return round(distance / kwh, 1)
+    kilometres = DistanceConverter.convert(distance, unit, UnitOfLength.KILOMETERS)
+    return round(kwh / kilometres * 100, 1)
+
+
 @dataclass
-class FuelEconomyState:
-    """Distance driven and fuel used, accumulated per vehicle.
+class EconomyState:
+    """Distance driven and energy used, accumulated per vehicle.
 
     Kept across restarts, so the totals do not start again every time Home
-    Assistant is restarted. The Pleos API has no economy figure of its own.
+    Assistant is restarted. The Pleos API has no economy figure of its own,
+    whether for fuel or for electricity.
     """
 
     last_odometer: float | None = None
-    last_fuel_level: float | None = None
-    tank_distance: float = 0.0
-    tank_fuel: float = 0.0
+    last_level: float | None = None
+    window_distance: float = 0.0
+    window_energy: float = 0.0
     average_distance: float = 0.0
-    average_fuel: float = 0.0
+    average_energy: float = 0.0
 
 
 class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
@@ -94,20 +127,29 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self.client = client
         self.vehicles: dict[str, dict[str, Any]] = {v["vin"]: v for v in vehicles}
         self.tank_capacity = tank_capacity_from_entry(config_entry)
-        self._fuel_economy: dict[str, FuelEconomyState] = {}
+        self.battery_capacity = battery_capacity_from_entry(config_entry)
+        self._fuel_economy: dict[str, EconomyState] = {}
+        self._electric_economy: dict[str, EconomyState] = {}
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{config_entry.entry_id}")
 
     async def async_load_fuel_economy(self) -> None:
-        """Restore the fuel economy accumulators after a restart or reload."""
+        """Restore the economy accumulators after a restart or reload."""
         stored = await self._store.async_load()
         if not isinstance(stored, dict):
             return
-        names = [field.name for field in fields(FuelEconomyState)]
+        names = [field.name for field in fields(EconomyState)]
         for vin, values in stored.items():
-            if isinstance(values, dict):
-                self._fuel_economy[vin] = FuelEconomyState(
-                    **{name: values[name] for name in names if name in values}
-                )
+            if not isinstance(values, dict):
+                continue
+            for key, target in (
+                ("fuel", self._fuel_economy),
+                ("electric", self._electric_economy),
+            ):
+                block = values.get(key)
+                if isinstance(block, dict):
+                    target[vin] = EconomyState(
+                        **{name: block[name] for name in names if name in block}
+                    )
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         data: dict[str, dict[str, Any]] = {}
@@ -117,13 +159,22 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 vehicle_data = await self.client.async_get_vehicle_data(vin)
                 data[vin] = {**vehicle_data, "vin": vin}
                 updated = self._update_fuel_economy(vin, data[vin]) or updated
+                updated = self._update_electric_economy(vin, data[vin]) or updated
         except PleosAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except PleosError as err:
             raise UpdateFailed(str(err)) from err
         if updated:
             await self._store.async_save(
-                {vin: asdict(state) for vin, state in self._fuel_economy.items()}
+                {
+                    vin: {
+                        "fuel": asdict(self._fuel_economy.get(vin, EconomyState())),
+                        "electric": asdict(
+                            self._electric_economy.get(vin, EconomyState())
+                        ),
+                    }
+                    for vin in self.vehicles
+                }
             )
         return data
 
@@ -135,38 +186,65 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         in the fuel level since the previous update. Returns whether a reading
         was folded in.
         """
-        state = self._fuel_economy.setdefault(vin, FuelEconomyState())
+        state = self._fuel_economy.setdefault(vin, EconomyState())
         unit = length_unit(data)
         data[KEY_FUEL_ECONOMY_UNIT] = ECONOMY_UNITS.get(unit) if unit else None
 
         current_odometer = odometer(data)
         current_level = fuel_level(data)
         if current_odometer is not None and current_level is not None:
-            self._accumulate(state, current_odometer, current_level)
+            self._fold(state, current_odometer, current_level, self.tank_capacity)
 
-        data[KEY_FUEL_ECONOMY] = economy_value(state.tank_distance, state.tank_fuel, unit)
-        data[KEY_FUEL_ECONOMY_AVERAGE] = economy_value(
-            state.average_distance, state.average_fuel, unit
+        data[KEY_FUEL_ECONOMY] = fuel_economy_value(
+            state.window_distance, state.window_energy, unit
+        )
+        data[KEY_FUEL_ECONOMY_AVERAGE] = fuel_economy_value(
+            state.average_distance, state.average_energy, unit
         )
         return current_odometer is not None and current_level is not None
 
-    def _accumulate(
+    def _update_electric_economy(self, vin: str, data: dict[str, Any]) -> bool:
+        """Add the electric economy figures to one vehicle's data.
+
+        Pleos reports the battery state of charge as a percentage and never
+        reports kilowatt-hours used, so economy is worked out the same way as
+        fuel economy but from the battery level and the battery capacity.
+        Returns whether a reading was folded in.
+        """
+        state = self._electric_economy.setdefault(vin, EconomyState())
+        unit = length_unit(data)
+        data[KEY_ELECTRIC_ECONOMY_UNIT] = ELECTRIC_ECONOMY_UNITS.get(unit) if unit else None
+
+        current_odometer = odometer(data)
+        current_level = battery_level(data)
+        if current_odometer is not None and current_level is not None:
+            self._fold(state, current_odometer, current_level, self.battery_capacity)
+
+        data[KEY_ELECTRIC_ECONOMY] = electric_economy_value(
+            state.window_distance, state.window_energy, unit
+        )
+        data[KEY_ELECTRIC_ECONOMY_AVERAGE] = electric_economy_value(
+            state.average_distance, state.average_energy, unit
+        )
+        return current_odometer is not None and current_level is not None
+
+    def _fold(
         self,
-        state: FuelEconomyState,
+        state: EconomyState,
         current_odometer: float,
         current_level: float,
+        capacity: float,
     ) -> None:
-        """Fold one reading into the accumulators.
+        """Fold one reading into an accumulator.
 
         Most cars only upload occasionally, so a reading can cover many days of
-        driving. The fuel level is quantised to one percent, but summing the
-        drops telescopes, so a whole tank is accurate where a single update is
-        not.
+        driving. The level is quantised to one percent, but summing the drops
+        telescopes, so a whole window is accurate where a single update is not.
         """
         previous_odometer = state.last_odometer
-        previous_level = state.last_fuel_level
+        previous_level = state.last_level
         state.last_odometer = current_odometer
-        state.last_fuel_level = current_level
+        state.last_level = current_level
         if previous_odometer is None or previous_level is None:
             # First reading for this vehicle: nothing to compare against yet.
             return
@@ -178,22 +256,22 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         if not 0 <= distance <= MAX_ODOMETER_STEP:
             return
 
-        # A rise in the level is a refill. The fuel added and the fuel burned
-        # in the same interval cannot be told apart, so the interval is skipped,
-        # and the tank window starts again from the new reading. A small rise
-        # is rounding noise, and a drop is fuel burned.
-        if previous_level - current_level <= -REFUEL_LEVEL_RISE:
-            state.tank_distance = 0.0
-            state.tank_fuel = 0.0
+        # A rise in the level is a refuel or a recharge. The energy added and
+        # the energy burned in the same interval cannot be told apart, so the
+        # interval is skipped, and the window starts again from the new
+        # reading. A small rise is rounding noise, and a drop is energy used.
+        if previous_level - current_level <= -LEVEL_RISE:
+            state.window_distance = 0.0
+            state.window_energy = 0.0
             return
 
         state.average_distance += distance
-        state.tank_distance += distance
+        state.window_distance += distance
         level_lost = previous_level - current_level
         if level_lost > 0:
-            litres = level_lost / 100 * self.tank_capacity
-            state.average_fuel += litres
-            state.tank_fuel += litres
+            energy = level_lost / 100 * capacity
+            state.average_energy += energy
+            state.window_energy += energy
 
 
 type PleosConfigEntry = ConfigEntry[PleosVehicleCoordinator]

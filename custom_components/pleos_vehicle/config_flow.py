@@ -12,7 +12,7 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.const import UnitOfVolume
+from homeassistant.const import UnitOfEnergy, UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
@@ -31,19 +31,24 @@ from homeassistant.helpers.selector import (
 from .api import PleosAuthError, PleosClient, PleosError
 from .const import (
     BRANDS,
+    CONF_BATTERY_CAPACITY,
     CONF_BRAND,
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     CONF_TANK_CAPACITY,
     CONF_VEHICLES,
+    DEFAULT_BATTERY_CAPACITY,
     DEFAULT_BRAND,
     DEFAULT_TANK_CAPACITY,
     DOMAIN,
+    MAX_BATTERY_CAPACITY,
     MAX_TANK_CAPACITY,
+    MIN_BATTERY_CAPACITY,
     MIN_TANK_CAPACITY,
+    BATTERY_CAPACITY_STEP,
     TANK_CAPACITY_STEP,
 )
-from .coordinator import tank_capacity_from_entry
+from .coordinator import battery_capacity_from_entry, tank_capacity_from_entry
 
 BRAND_OPTIONS = [
     SelectOptionDict(value=value, label=label) for value, label in BRANDS.items()
@@ -66,6 +71,16 @@ TANK_CAPACITY_SELECTOR = NumberSelector(
     )
 )
 
+BATTERY_CAPACITY_SELECTOR = NumberSelector(
+    NumberSelectorConfig(
+        min=MIN_BATTERY_CAPACITY,
+        max=MAX_BATTERY_CAPACITY,
+        step=BATTERY_CAPACITY_STEP,
+        unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        mode=NumberSelectorMode.BOX,
+    )
+)
+
 STEP_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_BRAND, default=DEFAULT_BRAND): SelectSelector(
@@ -75,6 +90,9 @@ STEP_SCHEMA = vol.Schema(
         vol.Required(
             CONF_TANK_CAPACITY, default=DEFAULT_TANK_CAPACITY
         ): TANK_CAPACITY_SELECTOR,
+        vol.Required(
+            CONF_BATTERY_CAPACITY, default=DEFAULT_BATTERY_CAPACITY
+        ): BATTERY_CAPACITY_SELECTOR,
     }
 )
 
@@ -139,6 +157,7 @@ class PleosConfigFlow(ConfigFlow, domain=DOMAIN):
                         },
                         options={
                             CONF_TANK_CAPACITY: user_input[CONF_TANK_CAPACITY],
+                            CONF_BATTERY_CAPACITY: user_input[CONF_BATTERY_CAPACITY],
                         },
                     )
         return self.async_show_form(
@@ -202,6 +221,10 @@ class PleosOptionsFlow(OptionsFlow):
                     CONF_TANK_CAPACITY,
                     default=tank_capacity_from_entry(self.config_entry),
                 ): TANK_CAPACITY_SELECTOR,
+                vol.Required(
+                    CONF_BATTERY_CAPACITY,
+                    default=battery_capacity_from_entry(self.config_entry),
+                ): BATTERY_CAPACITY_SELECTOR,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
