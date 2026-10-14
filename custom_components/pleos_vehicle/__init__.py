@@ -33,6 +33,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def _async_options_updated(hass: HomeAssistant, entry: PleosConfigEntry) -> None:
+    """Reload the entry so a changed option takes effect."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: PleosConfigEntry) -> bool:
     """Set up Pleos Vehicle Data from a config entry."""
     client = PleosClient(
@@ -44,8 +49,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: PleosConfigEntry) -> boo
     coordinator = PleosVehicleCoordinator(
         hass, entry, client, entry.data[CONF_VEHICLES]
     )
+    # Restore the fuel economy accumulators before the first poll, so the
+    # distance driven since the last update is still counted.
+    await coordinator.async_load_fuel_economy()
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

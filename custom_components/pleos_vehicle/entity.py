@@ -9,16 +9,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import BRANDS, DOMAIN
 from .coordinator import PleosVehicleCoordinator
+from .readings import dig
 
-
-def dig(data: Any, *path: str | int) -> Any:
-    """Return a nested value, or None when any step is missing."""
-    for key in path:
-        try:
-            data = data[key]
-        except (KeyError, IndexError, TypeError):
-            return None
-    return data
+__all__ = ["PleosVehicleEntity", "dig"]
 
 
 class PleosVehicleEntity(CoordinatorEntity[PleosVehicleCoordinator]):

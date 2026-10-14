@@ -8,7 +8,11 @@
         "data": {
           "brand": "Brand",
           "client_id": "Client ID",
-          "client_secret": "Client secret"
+          "client_secret": "Client secret",
+          "tank_capacity": "Fuel tank capacity"
+        },
+        "data_description": {
+          "tank_capacity": "Used to work out fuel economy. 42 L is the figure for the NX4 Tucson plug-in hybrid; adjust it for your car."
         }
       },
       "reauth_confirm": {
@@ -28,6 +32,20 @@
     "abort": {
       "already_configured": "This API key is already configured.",
       "reauth_successful": "Credentials updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pleos Vehicle Data",
+        "description": "Change how the Pleos data is interpreted. The integration stays read-only.",
+        "data": {
+          "tank_capacity": "Fuel tank capacity"
+        },
+        "data_description": {
+          "tank_capacity": "Used to work out fuel economy, because Pleos reports the fuel level as a percentage and never reports litres burned."
+        }
+      }
     }
   },
   "services": {
@@ -52,6 +70,12 @@
       },
       "ev_driving_range": {
         "name": "EV Range"
+      },
+      "fuel_economy": {
+        "name": "Fuel Economy (Last Tank)"
+      },
+      "fuel_economy_average": {
+        "name": "Fuel Economy (Average)"
       },
       "ev_battery_percentage": {
         "name": "EV Battery Level"

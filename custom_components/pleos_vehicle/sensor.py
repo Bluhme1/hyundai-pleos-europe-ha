@@ -15,7 +15,6 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     PERCENTAGE,
-    UnitOfLength,
     UnitOfPressure,
     UnitOfTemperature,
     UnitOfTime,
@@ -23,18 +22,12 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
-from homeassistant.util.unit_conversion import DistanceConverter
 
+from .const import KEY_FUEL_ECONOMY, KEY_FUEL_ECONOMY_AVERAGE, KEY_FUEL_ECONOMY_UNIT
 from .coordinator import PleosConfigEntry, PleosVehicleCoordinator
-from .entity import PleosVehicleEntity, dig
+from .entity import PleosVehicleEntity
+from .readings import LENGTH_UNITS, dig, length_unit, odometer
 
-LENGTH_UNITS = {
-    "km": UnitOfLength.KILOMETERS,
-    "mile": UnitOfLength.MILES,
-    "miles": UnitOfLength.MILES,
-    "meter": UnitOfLength.METERS,
-    "feet": UnitOfLength.FEET,
-}
 TEMPERATURE_UNITS = {
     "C": UnitOfTemperature.CELSIUS,
     "F": UnitOfTemperature.FAHRENHEIT,
@@ -134,25 +127,6 @@ def _ev_range_unit(data: dict[str, Any]) -> str | None:
     return _range_unit(_ev_range_entry(data))
 
 
-def _odometer_unit(data: dict[str, Any]) -> str | None:
-    return LENGTH_UNITS.get(dig(data, "driving", "odometer", "unit"))
-
-
-def _odometer_value(data: dict[str, Any]) -> float | None:
-    """Return the odometer, corrected into the car's own unit.
-
-    Unlike the driving ranges, the vehicle API reports the odometer distance
-    in kilometres while labelling it with the car's display unit: a car
-    showing miles sends the km figure with a ``mile`` unit. Convert it so the
-    number matches the unit the car actually displays.
-    """
-    raw = dig(data, "driving", "odometer", "value")
-    unit = _odometer_unit(data)
-    if not isinstance(raw, (int, float)) or isinstance(raw, bool) or unit is None:
-        return raw
-    return round(DistanceConverter.convert(raw, UnitOfLength.KILOMETERS, unit), 1)
-
-
 def _tire_value(row: int, side: str) -> Callable[[dict[str, Any]], float | None]:
     def _value(data: dict[str, Any]) -> float | None:
         raw = dig(data, "status", "tire", row, side)
@@ -186,10 +160,11 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
         translation_key="odometer",
         # No device_class, so the odometer stays in the car's own unit
         # (miles here) instead of being converted into the system unit.
-        # _odometer_value applies the km -> car's-unit correction the API omits.
+        # readings.odometer applies the km -> car's-unit correction the API
+        # omits.
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=_odometer_value,
-        unit_fn=_odometer_unit,
+        value_fn=odometer,
+        unit_fn=length_unit,
     ),
     PleosSensorEntityDescription(
         key="fuel_level",
@@ -214,6 +189,26 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_ev_range_value,
         unit_fn=_ev_range_unit,
+    ),
+    PleosSensorEntityDescription(
+        key="fuel_economy",
+        translation_key="fuel_economy",
+        # Worked out by the coordinator from the odometer and the fuel level,
+        # because Pleos has no economy figure and never reports litres burned.
+        # No device_class exists for fuel economy, so the unit follows the car:
+        # mpg for a car showing miles, L/100km for one showing kilometres.
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get(KEY_FUEL_ECONOMY),
+        unit_fn=lambda data: data.get(KEY_FUEL_ECONOMY_UNIT),
+    ),
+    PleosSensorEntityDescription(
+        key="fuel_economy_average",
+        translation_key="fuel_economy_average",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get(KEY_FUEL_ECONOMY_AVERAGE),
+        unit_fn=lambda data: data.get(KEY_FUEL_ECONOMY_UNIT),
     ),
     PleosSensorEntityDescription(
         key="ev_battery_percentage",

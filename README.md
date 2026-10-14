@@ -43,6 +43,7 @@ Use the **My Vehicle Data API** values only. The SDK / app-project credentials f
 1. Go to **Settings → Devices & services → Add integration** and search for **Pleos Vehicle Data**.
 2. Choose your **Brand**.
 3. Enter your **Client ID** and **Client secret**.
+4. Set your car's **Fuel tank capacity**. It is used to work out fuel economy, and defaults to 42 L (the NX4 Tucson plug-in hybrid). Change it later with the entry's **Configure** button.
 
 Every vehicle shared with the key appears as its own device. The device is named after the vehicle's nickname in Pleos, or its VIN if no nickname is set. You can rename the device in Home Assistant.
 
@@ -54,13 +55,22 @@ Data is polled from Pleos every 15 minutes.
 
 | Platform | Entities |
 |---|---|
-| Sensor | VIN, odometer, fuel level and fuel range (petrol and hybrid cars only), EV range, EV battery level, estimated charge duration, charge target (AC and DC), outside and set temperature, tyre pressure (four wheels), last updated, location last updated |
+| Sensor | VIN, odometer, fuel level and fuel range (petrol and hybrid cars only), fuel economy (last tank and average), EV range, EV battery level, estimated charge duration, charge target (AC and DC), outside and set temperature, tyre pressure (four wheels), last updated, location last updated |
 | Binary sensor | Locked (on = unlocked), per-door lock and open states, bonnet, boot, sunroof, EV charging, plugged in, engine (ignition), air conditioner, defrost, steering wheel heater, seat heaters, and the warning lights Pleos reports (low fuel, smart key battery, washer fluid, brake fluid, oil level, tyre pressure, headlamp, rear lamp and turn signal faults) |
 | Device tracker | Location (GPS) |
 
 Some values are only available for some models. A sensor can show "unknown" if Pleos doesn't return that field for your car.
 
 **Units.** The distance sensors — odometer, fuel range and EV range — show the unit your car reports (for example, miles in the UK), rather than Home Assistant converting them to your configured length unit. This keeps them matching the car's own display.
+
+**Fuel economy.** Pleos does not report fuel economy, so the integration works it out from the odometer and the fuel level: the distance driven between updates, and the fuel used, taken from how far the level has fallen and your tank capacity. Two sensors are provided:
+
+- **Fuel Economy (Last Tank)** — restarts at each refill, so it reports the tank you are on now.
+- **Fuel Economy (Average)** — everything driven since the integration first started tracking.
+
+They read **mpg** (UK gallons) for a car that displays miles, and **L/100km** for a car that displays kilometres. Both begin as "unknown" and fill in once the car has uploaded a change in both the odometer and the fuel level. The fuel level is a whole percentage and the car only uploads occasionally, so a single tank takes a while to settle; the average is the steadier figure. On a plug-in hybrid this is petrol economy only — electric miles push it up, because electricity is not counted.
+
+Change the tank capacity with the entry's **Configure** button. It is the only setting, and a corrected value affects the figures from that point on, not the ones already accumulated.
 
 ## Services
 

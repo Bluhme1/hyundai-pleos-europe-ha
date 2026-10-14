@@ -6,10 +6,19 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
+from homeassistant.const import UnitOfVolume
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -25,10 +34,16 @@ from .const import (
     CONF_BRAND,
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
+    CONF_TANK_CAPACITY,
     CONF_VEHICLES,
     DEFAULT_BRAND,
+    DEFAULT_TANK_CAPACITY,
     DOMAIN,
+    MAX_TANK_CAPACITY,
+    MIN_TANK_CAPACITY,
+    TANK_CAPACITY_STEP,
 )
+from .coordinator import tank_capacity_from_entry
 
 BRAND_OPTIONS = [
     SelectOptionDict(value=value, label=label) for value, label in BRANDS.items()
@@ -41,12 +56,25 @@ CREDENTIAL_FIELDS = {
     ),
 }
 
+TANK_CAPACITY_SELECTOR = NumberSelector(
+    NumberSelectorConfig(
+        min=MIN_TANK_CAPACITY,
+        max=MAX_TANK_CAPACITY,
+        step=TANK_CAPACITY_STEP,
+        unit_of_measurement=UnitOfVolume.LITERS,
+        mode=NumberSelectorMode.BOX,
+    )
+)
+
 STEP_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_BRAND, default=DEFAULT_BRAND): SelectSelector(
             SelectSelectorConfig(options=BRAND_OPTIONS, mode=SelectSelectorMode.DROPDOWN)
         ),
         **CREDENTIAL_FIELDS,
+        vol.Required(
+            CONF_TANK_CAPACITY, default=DEFAULT_TANK_CAPACITY
+        ): TANK_CAPACITY_SELECTOR,
     }
 )
 
@@ -103,11 +131,25 @@ class PleosConfigFlow(ConfigFlow, domain=DOMAIN):
                     self._abort_if_unique_id_configured()
                     return self.async_create_entry(
                         title=f"Pleos Vehicle Data ({BRANDS[user_input[CONF_BRAND]]})",
-                        data={**user_input, CONF_VEHICLES: vehicles},
+                        data={
+                            CONF_BRAND: user_input[CONF_BRAND],
+                            CONF_CLIENT_ID: user_input[CONF_CLIENT_ID],
+                            CONF_CLIENT_SECRET: user_input[CONF_CLIENT_SECRET],
+                            CONF_VEHICLES: vehicles,
+                        },
+                        options={
+                            CONF_TANK_CAPACITY: user_input[CONF_TANK_CAPACITY],
+                        },
                     )
         return self.async_show_form(
             step_id="user", data_schema=STEP_SCHEMA, errors=errors
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> PleosOptionsFlow:
+        """Create the options flow."""
+        return PleosOptionsFlow()
 
     async def async_step_reauth(
         self, entry_data: dict[str, Any]
@@ -143,3 +185,23 @@ class PleosConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reauth_confirm", data_schema=REAUTH_SCHEMA, errors=errors
         )
+
+
+class PleosOptionsFlow(OptionsFlow):
+    """Handle the Pleos Vehicle Data options."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change how the Pleos data is interpreted."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_TANK_CAPACITY,
+                    default=tank_capacity_from_entry(self.config_entry),
+                ): TANK_CAPACITY_SELECTOR,
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
