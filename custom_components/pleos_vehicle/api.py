@@ -65,10 +65,10 @@ class PleosClient:
         if self._token is None:
             await self._async_fetch_token()
         status, body = await self._async_call("GET", path, authorized=True)
-        if status == 401:
+        if status in (401, 403):
             await self._async_fetch_token()
             status, body = await self._async_call("GET", path, authorized=True)
-            if status == 401:
+            if status in (401, 403):
                 raise PleosAuthError("Access token rejected after renewal")
         if status >= 400 or "error" in body:
             raise PleosError(f"Pleos API returned HTTP {status} for {path}")
