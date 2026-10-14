@@ -53,6 +53,9 @@ KEY_ELECTRIC_ECONOMY = "electric_economy"
 KEY_ELECTRIC_ECONOMY_AVERAGE = "electric_economy_average"
 KEY_ELECTRIC_ECONOMY_UNIT = "electric_economy_unit"
 
+# When the coordinator last fetched this vehicle's data from Pleos.
+KEY_LAST_POLLED = "last_polled"
+
 # Version of the store holding the fuel economy accumulators.
 STORAGE_VERSION = 1
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass, fields
+from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -27,6 +28,7 @@ from .const import (
     KEY_FUEL_ECONOMY,
     KEY_FUEL_ECONOMY_AVERAGE,
     KEY_FUEL_ECONOMY_UNIT,
+    KEY_LAST_POLLED,
     LITRES_PER_UK_GALLON,
     MAX_ODOMETER_STEP,
     LEVEL_RISE,
@@ -157,7 +159,11 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         try:
             for vin in self.vehicles:
                 vehicle_data = await self.client.async_get_vehicle_data(vin)
-                data[vin] = {**vehicle_data, "vin": vin}
+                data[vin] = {
+                    **vehicle_data,
+                    "vin": vin,
+                    KEY_LAST_POLLED: datetime.now(UTC),
+                }
                 updated = self._update_fuel_economy(vin, data[vin]) or updated
                 updated = self._update_electric_economy(vin, data[vin]) or updated
         except PleosAuthError as err:

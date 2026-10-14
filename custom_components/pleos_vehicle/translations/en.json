@@ -117,6 +117,9 @@
       "tire_pressure_rear_right": {
         "name": "Tire Pressure - Rear Right"
       },
+      "last_polled_at": {
+        "name": "Last Polled"
+      },
       "last_updated_at": {
         "name": "Last Updated At"
       },

@@ -30,6 +30,7 @@ from .const import (
     KEY_FUEL_ECONOMY,
     KEY_FUEL_ECONOMY_AVERAGE,
     KEY_FUEL_ECONOMY_UNIT,
+    KEY_LAST_POLLED,
 )
 from .coordinator import PleosConfigEntry, PleosVehicleCoordinator
 from .entity import PleosVehicleEntity
@@ -327,6 +328,14 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_tire_value(1, "right"),
         unit_fn=_tire_unit(1),
+    ),
+    PleosSensorEntityDescription(
+        key="last_polled_at",
+        translation_key="last_polled_at",
+        # When Home Assistant last fetched the data from Pleos. Distinct from
+        # Last Updated At, which is when the car last uploaded.
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda data: data.get(KEY_LAST_POLLED),
     ),
     PleosSensorEntityDescription(
         key="last_updated_at",
