@@ -24,6 +24,13 @@ class PleosConnectionError(PleosError):
     """The Pleos API could not be reached."""
 
 
+def _error_code(body: dict[str, Any]) -> str:
+    """Return Pleos's short error code for a log message, if it sent one."""
+    error = body.get("error")
+    code = error.get("code") if isinstance(error, dict) else None
+    return f" ({code})" if isinstance(code, str) and code else ""
+
+
 async def _async_read_body(response: aiohttp.ClientResponse) -> dict[str, Any]:
     try:
         body = await response.json(content_type=None)
@@ -69,10 +76,18 @@ class PleosClient:
             await self._async_fetch_token()
             status, body = await self._async_call("GET", path, authorized=True)
             if status in (401, 403):
-                raise PleosAuthError("Access token rejected after renewal")
+                raise PleosError(
+                    f"Pleos API refused the renewed token (HTTP {status} for {path})"
+                )
         if status >= 400 or "error" in body:
-            raise PleosError(f"Pleos API returned HTTP {status} for {path}")
+            raise PleosError(
+                f"Pleos API returned HTTP {status} for {path}{_error_code(body)}"
+            )
         return body.get("data") or {}
+
+    def reset_token(self) -> None:
+        """Forget the access token so the next request fetches a new one."""
+        self._token = None
 
     async def _async_fetch_token(self) -> None:
         status, body = await self._async_call(

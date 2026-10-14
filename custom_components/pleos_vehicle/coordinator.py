@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
@@ -38,6 +39,10 @@ from .const import (
 from .readings import battery_level, fuel_level, length_unit, odometer
 
 _LOGGER = logging.getLogger(__name__)
+
+# Pause before retrying a vehicle that Pleos refused, so a brief server
+# problem has a moment to clear.
+RETRY_DELAY_SECONDS = 5
 
 # Fuel economy follows the car's own unit: miles per UK gallon for a car
 # showing miles, litres per 100 km for one showing kilometres.
@@ -132,6 +137,7 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self.battery_capacity = battery_capacity_from_entry(config_entry)
         self._fuel_economy: dict[str, EconomyState] = {}
         self._electric_economy: dict[str, EconomyState] = {}
+        self._last_good: dict[str, dict[str, Any]] = {}
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{config_entry.entry_id}")
 
     async def async_load_fuel_economy(self) -> None:
@@ -158,12 +164,26 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         updated = False
         try:
             for vin in self.vehicles:
-                vehicle_data = await self.client.async_get_vehicle_data(vin)
+                try:
+                    vehicle_data = await self._async_fetch_vehicle(vin)
+                except PleosAuthError:
+                    raise
+                except PleosError as err:
+                    previous = self._last_good.get(vin)
+                    if previous is None:
+                        raise
+                    _LOGGER.warning(
+                        "Pleos data could not be refreshed, keeping the last values: %s",
+                        err,
+                    )
+                    data[vin] = previous
+                    continue
                 data[vin] = {
                     **vehicle_data,
                     "vin": vin,
                     KEY_LAST_POLLED: datetime.now(UTC),
                 }
+                self._last_good[vin] = data[vin]
                 updated = self._update_fuel_economy(vin, data[vin]) or updated
                 updated = self._update_electric_economy(vin, data[vin]) or updated
         except PleosAuthError as err:
@@ -183,6 +203,17 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 }
             )
         return data
+
+    async def _async_fetch_vehicle(self, vin: str) -> dict[str, dict[str, Any]]:
+        """Fetch one vehicle, retrying once on a fresh token if Pleos refuses."""
+        try:
+            return await self.client.async_get_vehicle_data(vin)
+        except PleosAuthError:
+            raise
+        except PleosError:
+            self.client.reset_token()
+            await asyncio.sleep(RETRY_DELAY_SECONDS)
+            return await self.client.async_get_vehicle_data(vin)
 
     def _update_fuel_economy(self, vin: str, data: dict[str, Any]) -> bool:
         """Add the fuel economy figures to one vehicle's data.
