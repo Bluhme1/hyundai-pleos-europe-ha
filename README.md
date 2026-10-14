@@ -60,6 +60,8 @@ Data is polled from Pleos every 15 minutes.
 
 Some values are only available for some models. A sensor can show "unknown" if Pleos doesn't return that field for your car.
 
+**Units.** The distance sensors — odometer, fuel range and EV range — show the unit your car reports (for example, miles in the UK), rather than Home Assistant converting them to your configured length unit. This keeps them matching the car's own display.
+
 ## Services
 
 ### `pleos_vehicle.refresh`
@@ -73,6 +75,7 @@ Pleos returns the copy of the car's data it already holds, which is updated when
 - **Read-only.** Pleos's Vehicle Data API has no commands. You can't lock or unlock the car, start climate or charging, or open windows from this integration.
 - **Europe only**, according to Pleos.
 - **Not every car reports every field.** Window positions, battery health and service data aren't part of this API. Fuel level and fuel range come from the petrol or hybrid engine, so pure EVs show them as unknown.
+- **Plug-in hybrids report two range entries of the same type.** Pleos labels both as `PHEV` with no `EV` entry, so the integration treats the larger as the petrol range and the smaller as the electric range.
 - **Data is as current as the car's last upload to Hyundai.**
 
 ## Migrating from kia_uvo
@@ -81,7 +84,7 @@ Entity names follow the vehicle's device name, so an entity named `tucson_ev_bat
 
 - `lock.*_door_lock` → `binary_sensor.*_locked`. This is read-only, and its "on" means unlocked.
 - Seat sensors → seat heater binary sensors.
-- Car battery level, back window heater, and kia_uvo's force-update and lock/climate services have no equivalent. Fuel level and fuel range are now available for petrol and hybrid cars. Update any automations or dashboards that use the removed entities or services.
+- Car battery level, back window heater, and kia_uvo's force-update and lock/climate services have no equivalent. Fuel level and fuel range are now available for petrol and hybrid cars. Update any automations or dashboards that use them.
 
 ## Security
 

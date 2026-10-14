@@ -64,16 +64,16 @@ def _last_updated(data: dict[str, Any]) -> datetime | None:
     return max(known) if known else None
 
 
-def _range_entry(data: dict[str, Any], fuel_types: tuple[str, ...]) -> dict[str, Any] | None:
-    for entry in dig(data, "powertrains", "distanceToEmpties") or []:
-        if isinstance(entry, dict) and entry.get("type") in fuel_types:
-            return entry
-    return None
+def _range_entries(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the usable distance-to-empty entries Pleos reports."""
+    entries = dig(data, "powertrains", "distanceToEmpties")
+    if not isinstance(entries, list):
+        return []
+    return [entry for entry in entries if _entry_value(entry) is not None]
 
 
-def _range_value(data: dict[str, Any], fuel_types: tuple[str, ...]) -> int | None:
-    entry = _range_entry(data, fuel_types)
-    if entry is None:
+def _entry_value(entry: Any) -> int | None:
+    if not isinstance(entry, dict):
         return None
     try:
         return int(entry["value"])
@@ -81,25 +81,56 @@ def _range_value(data: dict[str, Any], fuel_types: tuple[str, ...]) -> int | Non
         return None
 
 
-def _range_unit(data: dict[str, Any], fuel_types: tuple[str, ...]) -> str | None:
-    entry = _range_entry(data, fuel_types)
-    return LENGTH_UNITS.get(entry.get("unit")) if entry else None
+def _fuel_range_entry(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the petrol driving range entry.
+
+    A plug-in hybrid reports several ``PHEV`` entries with no ``ICE``/``HEV``
+    one, so the largest of them is the petrol range.
+    """
+    entries = _range_entries(data)
+    for entry in entries:
+        if entry.get("type") in ("ICE", "HEV"):
+            return entry
+    plug_in = [entry for entry in entries if entry.get("type") == "PHEV"]
+    if plug_in:
+        return max(plug_in, key=_entry_value)
+    return None
 
 
-def _ev_range_value(data: dict[str, Any]) -> int | None:
-    return _range_value(data, ("EV",))
+def _ev_range_entry(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the electric driving range entry.
 
-
-def _ev_range_unit(data: dict[str, Any]) -> str | None:
-    return _range_unit(data, ("EV",))
+    A plug-in hybrid reports several ``PHEV`` entries with no ``EV`` one, so
+    the smallest of them is the electric range.
+    """
+    entries = _range_entries(data)
+    for entry in entries:
+        if entry.get("type") == "EV":
+            return entry
+    plug_in = [entry for entry in entries if entry.get("type") == "PHEV"]
+    if len(plug_in) > 1:
+        return min(plug_in, key=_entry_value)
+    return None
 
 
 def _fuel_range_value(data: dict[str, Any]) -> int | None:
-    return _range_value(data, ("ICE", "HEV", "PHEV"))
+    return _entry_value(_fuel_range_entry(data))
+
+
+def _ev_range_value(data: dict[str, Any]) -> int | None:
+    return _entry_value(_ev_range_entry(data))
+
+
+def _range_unit(entry: dict[str, Any] | None) -> str | None:
+    return LENGTH_UNITS.get(entry.get("unit")) if entry else None
 
 
 def _fuel_range_unit(data: dict[str, Any]) -> str | None:
-    return _range_unit(data, ("ICE", "HEV", "PHEV"))
+    return _range_unit(_fuel_range_entry(data))
+
+
+def _ev_range_unit(data: dict[str, Any]) -> str | None:
+    return _range_unit(_ev_range_entry(data))
 
 
 def _tire_value(row: int, side: str) -> Callable[[dict[str, Any]], float | None]:
@@ -133,7 +164,8 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
     PleosSensorEntityDescription(
         key="odometer",
         translation_key="odometer",
-        device_class=SensorDeviceClass.DISTANCE,
+        # No device_class, so the odometer stays in the car's own unit
+        # (miles here) instead of being converted into the system unit.
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda data: dig(data, "driving", "odometer", "value"),
         unit_fn=lambda data: LENGTH_UNITS.get(
@@ -150,7 +182,9 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
     PleosSensorEntityDescription(
         key="fuel_driving_range",
         translation_key="fuel_driving_range",
-        device_class=SensorDeviceClass.DISTANCE,
+        # No device_class: with one, Home Assistant converts the value into the
+        # configured length unit (km here). Pleos reports the car's own unit,
+        # so leave the value and unit exactly as the car reports them.
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_fuel_range_value,
         unit_fn=_fuel_range_unit,
@@ -158,7 +192,6 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
     PleosSensorEntityDescription(
         key="ev_driving_range",
         translation_key="ev_driving_range",
-        device_class=SensorDeviceClass.DISTANCE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_ev_range_value,
         unit_fn=_ev_range_unit,
