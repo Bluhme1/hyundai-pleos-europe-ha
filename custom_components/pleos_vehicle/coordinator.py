@@ -36,7 +36,7 @@ from .const import (
     SCAN_INTERVAL,
     STORAGE_VERSION,
 )
-from .readings import battery_level, fuel_level, length_unit, odometer
+from .readings import battery_level, dig, fuel_level, length_unit, odometer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -178,6 +178,10 @@ class PleosVehicleCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     )
                     data[vin] = previous
                     continue
+                _LOGGER.debug(
+                    "Pleos distanceToEmpties: %s",
+                    dig(vehicle_data, "powertrains", "distanceToEmpties") or "missing",
+                )
                 data[vin] = {
                     **vehicle_data,
                     "vin": vin,
