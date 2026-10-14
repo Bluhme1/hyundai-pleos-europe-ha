@@ -8,8 +8,8 @@ from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
-    SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
@@ -46,6 +46,7 @@ PRESSURE_UNITS = {
     "bar": UnitOfPressure.BAR,
 }
 TIMESTAMP_BLOCKS = ("batteries", "driving", "powertrains", "status", "locations")
+ATTR_LAST_KNOWN_AT = "last_known_at"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -54,6 +55,9 @@ class PleosSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[dict[str, Any]], Any]
     unit_fn: Callable[[dict[str, Any]], str | None] | None = None
+    # Pleos sometimes sends a dash instead of a range. Keep the last number
+    # received, and say when it was received, rather than going unknown.
+    keep_last_known: bool = False
 
 
 def _timestamp(value: Any) -> datetime | None:
@@ -184,6 +188,7 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
     PleosSensorEntityDescription(
         key="fuel_driving_range",
         translation_key="fuel_driving_range",
+        keep_last_known=True,
         # No device_class: with one, Home Assistant converts the value into the
         # configured length unit (km here). Pleos reports the car's own unit,
         # so leave the value and unit exactly as the car reports them.
@@ -194,6 +199,7 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
     PleosSensorEntityDescription(
         key="ev_driving_range",
         translation_key="ev_driving_range",
+        keep_last_known=True,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_ev_range_value,
         unit_fn=_ev_range_unit,
@@ -352,7 +358,7 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
 )
 
 
-class PleosVehicleSensor(PleosVehicleEntity, SensorEntity):
+class PleosVehicleSensor(PleosVehicleEntity, RestoreSensor):
     """A sensor backed by Pleos vehicle data."""
 
     entity_description: PleosSensorEntityDescription
@@ -365,21 +371,65 @@ class PleosVehicleSensor(PleosVehicleEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator, vin, description.key)
         self.entity_description = description
+        # (value, unit, when the value was last received from Pleos)
+        self._known: tuple[Any, str | None, datetime | None] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last known value after a restart."""
+        await super().async_added_to_hass()
+        if not self.entity_description.keep_last_known:
+            return
+        restored = await self.async_get_last_sensor_data()
+        state = await self.async_get_last_state()
+        if restored is None or restored.native_value is None:
+            return
+        seen = _timestamp(state.attributes.get(ATTR_LAST_KNOWN_AT)) if state else None
+        self._known = (
+            restored.native_value,
+            restored.native_unit_of_measurement,
+            seen,
+        )
+
+    def _read(self) -> tuple[Any, str | None]:
+        """Return this sensor's value and unit, keeping the last known range."""
+        description = self.entity_description
+        if self.vehicle_data is None:
+            value, unit = None, description.native_unit_of_measurement
+        else:
+            value = description.value_fn(self.vehicle_data)
+            if description.unit_fn is None:
+                unit = description.native_unit_of_measurement
+            else:
+                unit = description.unit_fn(self.vehicle_data)
+        if not description.keep_last_known:
+            return value, unit
+        if value is not None:
+            seen = self.vehicle_data.get(KEY_LAST_POLLED)
+            self._known = (value, unit, seen if isinstance(seen, datetime) else None)
+            return value, unit
+        if self._known is not None:
+            return self._known[0], self._known[1]
+        return None, unit
 
     @property
     def native_value(self) -> Any:
         """Return the sensor value."""
-        if self.vehicle_data is None:
-            return None
-        return self.entity_description.value_fn(self.vehicle_data)
+        return self._read()[0]
 
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Return the unit, which may depend on the vehicle's reported units."""
-        unit_fn = self.entity_description.unit_fn
-        if unit_fn is None or self.vehicle_data is None:
-            return self.entity_description.native_unit_of_measurement
-        return unit_fn(self.vehicle_data)
+        return self._read()[1]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str] | None:
+        """Say when a kept range was last received from Pleos."""
+        if not self.entity_description.keep_last_known or self._known is None:
+            return None
+        seen = self._known[2]
+        if seen is None:
+            return None
+        return {ATTR_LAST_KNOWN_AT: seen.isoformat()}
 
 
 async def async_setup_entry(
