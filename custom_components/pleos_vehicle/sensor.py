@@ -64,15 +64,15 @@ def _last_updated(data: dict[str, Any]) -> datetime | None:
     return max(known) if known else None
 
 
-def _ev_range_entry(data: dict[str, Any]) -> dict[str, Any] | None:
+def _range_entry(data: dict[str, Any], fuel_types: tuple[str, ...]) -> dict[str, Any] | None:
     for entry in dig(data, "powertrains", "distanceToEmpties") or []:
-        if isinstance(entry, dict) and entry.get("type") == "EV":
+        if isinstance(entry, dict) and entry.get("type") in fuel_types:
             return entry
     return None
 
 
-def _ev_range_value(data: dict[str, Any]) -> int | None:
-    entry = _ev_range_entry(data)
+def _range_value(data: dict[str, Any], fuel_types: tuple[str, ...]) -> int | None:
+    entry = _range_entry(data, fuel_types)
     if entry is None:
         return None
     try:
@@ -81,9 +81,25 @@ def _ev_range_value(data: dict[str, Any]) -> int | None:
         return None
 
 
-def _ev_range_unit(data: dict[str, Any]) -> str | None:
-    entry = _ev_range_entry(data)
+def _range_unit(data: dict[str, Any], fuel_types: tuple[str, ...]) -> str | None:
+    entry = _range_entry(data, fuel_types)
     return LENGTH_UNITS.get(entry.get("unit")) if entry else None
+
+
+def _ev_range_value(data: dict[str, Any]) -> int | None:
+    return _range_value(data, ("EV",))
+
+
+def _ev_range_unit(data: dict[str, Any]) -> str | None:
+    return _range_unit(data, ("EV",))
+
+
+def _fuel_range_value(data: dict[str, Any]) -> int | None:
+    return _range_value(data, ("ICE", "HEV", "PHEV"))
+
+
+def _fuel_range_unit(data: dict[str, Any]) -> str | None:
+    return _range_unit(data, ("ICE", "HEV", "PHEV"))
 
 
 def _tire_value(row: int, side: str) -> Callable[[dict[str, Any]], float | None]:
@@ -123,6 +139,21 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
         unit_fn=lambda data: LENGTH_UNITS.get(
             dig(data, "driving", "odometer", "unit")
         ),
+    ),
+    PleosSensorEntityDescription(
+        key="fuel_level",
+        translation_key="fuel_level",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        value_fn=lambda data: dig(data, "powertrains", "engine", "fuelLevel"),
+    ),
+    PleosSensorEntityDescription(
+        key="fuel_driving_range",
+        translation_key="fuel_driving_range",
+        device_class=SensorDeviceClass.DISTANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_fuel_range_value,
+        unit_fn=_fuel_range_unit,
     ),
     PleosSensorEntityDescription(
         key="ev_driving_range",

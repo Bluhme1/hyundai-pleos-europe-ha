@@ -44,6 +44,12 @@
       "odometer": {
         "name": "Odometer"
       },
+      "fuel_level": {
+        "name": "Fuel Level"
+      },
+      "fuel_driving_range": {
+        "name": "Fuel Driving Range"
+      },
       "ev_driving_range": {
         "name": "EV Range"
       },
