@@ -23,6 +23,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import DistanceConverter
 
 from .coordinator import PleosConfigEntry, PleosVehicleCoordinator
 from .entity import PleosVehicleEntity, dig
@@ -133,6 +134,25 @@ def _ev_range_unit(data: dict[str, Any]) -> str | None:
     return _range_unit(_ev_range_entry(data))
 
 
+def _odometer_unit(data: dict[str, Any]) -> str | None:
+    return LENGTH_UNITS.get(dig(data, "driving", "odometer", "unit"))
+
+
+def _odometer_value(data: dict[str, Any]) -> float | None:
+    """Return the odometer, corrected into the car's own unit.
+
+    Unlike the driving ranges, the vehicle API reports the odometer distance
+    in kilometres while labelling it with the car's display unit: a car
+    showing miles sends the km figure with a ``mile`` unit. Convert it so the
+    number matches the unit the car actually displays.
+    """
+    raw = dig(data, "driving", "odometer", "value")
+    unit = _odometer_unit(data)
+    if not isinstance(raw, (int, float)) or isinstance(raw, bool) or unit is None:
+        return raw
+    return round(DistanceConverter.convert(raw, UnitOfLength.KILOMETERS, unit), 1)
+
+
 def _tire_value(row: int, side: str) -> Callable[[dict[str, Any]], float | None]:
     def _value(data: dict[str, Any]) -> float | None:
         raw = dig(data, "status", "tire", row, side)
@@ -166,11 +186,10 @@ SENSORS: tuple[PleosSensorEntityDescription, ...] = (
         translation_key="odometer",
         # No device_class, so the odometer stays in the car's own unit
         # (miles here) instead of being converted into the system unit.
+        # _odometer_value applies the km -> car's-unit correction the API omits.
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda data: dig(data, "driving", "odometer", "value"),
-        unit_fn=lambda data: LENGTH_UNITS.get(
-            dig(data, "driving", "odometer", "unit")
-        ),
+        value_fn=_odometer_value,
+        unit_fn=_odometer_unit,
     ),
     PleosSensorEntityDescription(
         key="fuel_level",
